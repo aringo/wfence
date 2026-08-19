@@ -45,7 +45,10 @@ jobs:
       - name: Check out repository
         # Pinned to a commit SHA, not a tag. A mutable tag could be repointed at
         # attacker-controlled code inside a job that holds the API credential.
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        # v5+ is required: v4 targets the deprecated node20 runtime. When bumping
+        # this, re-check that persist-credentials still defaults to true -- the
+        # commit step below relies on it.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Fetch and validate the Wordfence feed
         id: sync
