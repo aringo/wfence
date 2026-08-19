@@ -108,6 +108,27 @@ intentions:
 2. **Per-record `copyrights` fields are preserved intact** in the distributed
    JSON. If you derive your own dataset from this one, carry them through.
 
+### If you build on this data, you inherit two conditions
+
+Both licensors grant broad redistribution rights, and both attach conditions
+that travel with the data to *you*, not just to this repository:
+
+**Defiant** (all 38,950 records) authorizes copies "provided that you include a
+hyperlink to this vulnerability record and reproduce Defiant's copyright
+designation and this license in any such copy." The hyperlink is already in each
+record's `references` array as
+`https://www.wordfence.com/threat-intel/vulnerabilities/id/<id>`. Every sync
+verifies that every record still carries it and records the count as
+`records_with_canonical_link` in the manifest. **If your tool displays a
+vulnerability, display that link with it.**
+
+**MITRE** (the ~36,000 records with CVE data) grants CVE reuse "provided that you
+reproduce MITRE's copyright designation and this license in any such copy."
+
+In practice: keep the `copyrights` object on any record you store or re-emit, and
+surface the Wordfence record link wherever you surface the vulnerability. Both
+conditions are cheap to satisfy and are the entire price of the license.
+
 **Third-Party Materials.** Wordfence distinguishes information it owns from
 Third-Party Materials, which remain subject to their own rights holders and
 licenses. Wordfence's grant cannot convey rights it does not itself hold, so

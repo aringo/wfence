@@ -165,6 +165,30 @@ def check_shrinkage(count: int, manifest_path: Path, allow_shrink: bool = False)
     log(f"Shrink check passed: {previous_count:,} -> {count:,} records")
 
 
+CANONICAL_LINK_PREFIX = "https://www.wordfence.com/threat-intel/vulnerabilities/id/"
+
+
+def count_canonical_links(records: dict) -> int:
+    """Count records carrying a hyperlink back to their own Wordfence record.
+
+    Defiant's license authorizes copies "provided that you include a hyperlink
+    to this vulnerability record". The feed satisfies this itself by putting
+    that URL in each record's `references`, and we distribute records verbatim
+    -- but that is an upstream behaviour, not a guarantee. Count it every sync
+    so the day it stops being true is the day we find out, rather than months
+    later.
+    """
+    linked = 0
+    for identifier, record in records.items():
+        for reference in record.get("references") or []:
+            if isinstance(reference, str) and reference.startswith(
+                CANONICAL_LINK_PREFIX + str(identifier)
+            ):
+                linked += 1
+                break
+    return linked
+
+
 def collect_attribution(records: dict) -> tuple[list[str], list[dict]]:
     """Pull the copyright/license data Wordfence embeds in every record.
 
@@ -328,6 +352,16 @@ def main() -> int:
     messages, licensors = collect_attribution(records)
     log(f"Collected {len(messages)} copyright message(s), {len(licensors)} disclosed licensor(s)")
 
+    linked = count_canonical_links(records)
+    if linked < count:
+        log(
+            f"::warning::{count - linked:,} of {count:,} records lack a hyperlink to "
+            "their own Wordfence record. Defiant's license conditions redistribution "
+            "on that link being present; verify before relying on this snapshot."
+        )
+    else:
+        log(f"Canonical-link check passed: {linked:,}/{count:,} records carry their record URL")
+
     notice = render_notice(messages, licensors, count, fetched_at)
     Path("NOTICE.md").write_text(notice)
     (args.out_dir / "NOTICE.md").write_text(notice)
@@ -346,6 +380,7 @@ def main() -> int:
         "feed": FEED,
         "fetched_at": fetched_at,
         "record_count": count,
+        "records_with_canonical_link": linked,
         "content_sha256": content_sha,
         "archive_filename": archive_path.name,
         "archive_sha256": archive_sha,
