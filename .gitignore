@@ -1,0 +1,14 @@
+# Build output. The archive is published as a release asset, never committed --
+# ~12 MB twice a day would compound into an unusable repository.
+dist/
+
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# Internal notes. Analysis.md is the private legal/architecture analysis behind
+# this mirror -- it discusses licensing gray areas and where counsel review is
+# warranted. This repository is public; that deliberation is not something to
+# publish alongside the thing it deliberates about. Kept local deliberately.
+Analysis.md

@@ -1,0 +1,153 @@
+name: Sync Wordfence Intelligence DB
+
+# Pulls the Wordfence Intelligence v3 production vulnerability feed twice a day
+# and republishes it as a compressed asset on a rolling release.
+#
+# The point of this design is to make exactly two API requests per day against
+# one authorized account, instead of every downstream tool holding a credential
+# and polling independently.
+
+on:
+  schedule:
+    # 05:17 and 17:17 UTC. The :17 offset is deliberate -- scheduled jobs on the
+    # hour contend with GitHub's peak queue and get delayed.
+    - cron: '17 5,17 * * *'
+  workflow_dispatch:
+    inputs:
+      force_publish:
+        description: 'Publish even if the feed content is byte-identical to the last sync'
+        type: boolean
+        default: false
+      allow_shrink:
+        description: 'Override the shrink guard (use only when a large record-count drop is known to be legitimate)'
+        type: boolean
+        default: false
+
+# Least privilege: this workflow writes commits and releases in its own repo and
+# needs nothing else. Every other permission scope is dropped.
+permissions:
+  contents: write
+
+# Never let two syncs race on the manifest or the release asset.
+concurrency:
+  group: wordfence-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Scheduled runs are automatically disabled on forks, but this also stops a
+    # fork owner from manually dispatching a job that expects the upstream secret.
+    if: github.repository == 'aringo/wfence'
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        # Pinned to a commit SHA, not a tag. A mutable tag could be repointed at
+        # attacker-controlled code inside a job that holds the API credential.
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+
+      - name: Fetch and validate the Wordfence feed
+        id: sync
+        # The credential is injected into this step's process environment only.
+        # It is deliberately NOT written as ${{ secrets.* }} inside the `run`
+        # script: that form substitutes the plaintext into the shell command
+        # text before execution, where it can surface via the process table, a
+        # trace, or an error echo. As an env var it stays in the process
+        # environment and never becomes part of any command line.
+        env:
+          WORDFENCE_API_TOKEN: ${{ secrets.WORDFENCE_API_TOKEN }}
+          # Read into the environment and branched on in shell rather than
+          # interpolated into the script text, same as the secret above.
+          ALLOW_SHRINK: ${{ inputs.allow_shrink }}
+        # No `set -x` here, ever -- tracing a step that holds a secret is how
+        # credentials end up in public build logs.
+        run: |
+          set -euo pipefail
+          ARGS=''
+          if [ "${ALLOW_SHRINK:-false}" = 'true' ]; then
+            ARGS='--allow-shrink'
+          fi
+          python3 scripts/sync_feed.py --data-dir data --out-dir dist $ARGS
+
+      - name: Commit manifest and regenerated attribution
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/manifest.json NOTICE.md
+          if git diff --staged --quiet; then
+            echo 'No tracked changes to commit.'
+          else
+            git commit -m "data: sync Wordfence feed (${{ steps.sync.outputs.record_count }} records)"
+            git push
+          fi
+
+      - name: Publish rolling release asset
+        if: steps.sync.outputs.changed == 'true' || inputs.force_publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECORDS: ${{ steps.sync.outputs.record_count }}
+          FETCHED_AT: ${{ steps.sync.outputs.fetched_at }}
+          ARCHIVE_SHA: ${{ steps.sync.outputs.archive_sha256 }}
+          ARCHIVE_BYTES: ${{ steps.sync.outputs.archive_bytes }}
+          ARCHIVE: ${{ steps.sync.outputs.archive_filename }}
+        run: |
+          set -euo pipefail
+          TAG=data-latest
+
+          SIZE_MB=$(awk "BEGIN {printf \"%.1f\", ${ARCHIVE_BYTES}/1048576}")
+          cat > notes.md <<EOF
+          Wordfence Intelligence production vulnerability feed, cached snapshot.
+
+          | | |
+          |---|---|
+          | Records | ${RECORDS} |
+          | Retrieved | ${FETCHED_AT} |
+          | Compressed size | ${SIZE_MB} MB (gzip) |
+          | SHA-256 | \`${ARCHIVE_SHA}\` |
+
+          **This asset is refreshed every 12 hours** (05:17 and 17:17 UTC). It is a
+          cached copy, not a live feed -- it can be up to 12 hours behind Wordfence.
+          For real-time data, query the Wordfence Intelligence API directly.
+
+          This tag is a rolling pointer: the asset is replaced in place on each
+          sync, so the download URL below is stable and always serves the most
+          recent snapshot.
+
+          \`\`\`
+          curl -fL -o ${ARCHIVE} \\
+            https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ARCHIVE}
+          \`\`\`
+
+          Data provided by Wordfence Intelligence / Defiant, Inc. Copyright and
+          ownership remain with Defiant, Inc. and the applicable owners of any
+          Third-Party Materials. See NOTICE.md, attached to this release.
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file notes.md --target "$GITHUB_SHA"
+          else
+            gh release create "$TAG" \
+              --title 'Wordfence vulnerability database (latest)' \
+              --notes-file notes.md \
+              --target "$GITHUB_SHA"
+          fi
+
+          gh release upload "$TAG" \
+            "dist/${ARCHIVE}" \
+            "dist/${ARCHIVE}.sha256" \
+            dist/NOTICE.md \
+            --clobber
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Wordfence sync'
+            echo ''
+            echo "- Content changed: \`${{ steps.sync.outputs.changed || 'n/a' }}\`"
+            echo "- Records: \`${{ steps.sync.outputs.record_count || 'n/a' }}\`"
+            echo "- Retrieved: \`${{ steps.sync.outputs.fetched_at || 'n/a' }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
