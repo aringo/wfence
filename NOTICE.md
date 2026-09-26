@@ -10,7 +10,7 @@ This project claims no ownership of the vulnerability data and does not
 license it as its own work. It is redistributed pursuant to the Wordfence
 Intelligence Terms and Conditions.
 
-Snapshot: 40,776 records, retrieved 2026-09-25T20:30:49Z.
+Snapshot: 40,779 records, retrieved 2026-09-26T09:54:20Z.
 
 ---
 
