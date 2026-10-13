@@ -1,15 +1,15 @@
 {
-  "archive_bytes": 11602394,
+  "archive_bytes": 11606069,
   "archive_filename": "wordfence-vulnerabilities-production.json.gz",
-  "archive_sha256": "e2d2d2c5d3dbdb5eff44701cfc6d9042edd0d5f1bccf64feee5b6969923ad3c6",
+  "archive_sha256": "1457fd27f8009fcf7c262dd018c447b22b2abc00957b457cbbabb36f46e39abe",
   "attribution": "NOTICE.md",
-  "content_sha256": "f1ceb4552f81c825db38e551eec71cd364d039cdce853c71d088b93e745b96ce",
+  "content_sha256": "77fabbb5228dc60d77a5901ec0c6f27a22c282f43fd6568b485a709f7843c408",
   "feed": "production",
-  "fetched_at": "2026-10-12T23:37:43Z",
-  "record_count": 41923,
-  "records_with_canonical_link": 41923,
+  "fetched_at": "2026-10-13T12:44:06Z",
+  "record_count": 41930,
+  "records_with_canonical_link": 41930,
   "schedule": "every 12 hours",
   "source": "Wordfence Intelligence",
   "source_url": "https://www.wordfence.com/api/intelligence/v3/vulnerabilities/production",
-  "uncompressed_bytes": 126021173
+  "uncompressed_bytes": 126045122
 }
